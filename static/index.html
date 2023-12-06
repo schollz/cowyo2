@@ -21,14 +21,28 @@
   <link rel="icon" type="image/png" sizes="96x96" href=/static/favicon-96x96.png>
   <link rel="icon" type="image/png" sizes="16x16" href=/static/favicon-16x16.png>
   <link rel="manifest" href=/static/manifest.json>
-  <meta name="msapplication-TileColor" content="#fff">
+  <meta name="msapplication-TileColor" content="#f0f0f0">
   <meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
-  <meta name="theme-color" content="#fff">
+  <meta name="theme-color" content="#f0f0f0">
   <style>
     body {
       font-family: 'Courier New', monospace;
       background-color: #f0f0f0;
       color: #333;
+    }
+
+    #fadeCircle {
+      width: 15px;
+      height: 15px;
+      background-color: gray;
+      border-radius: 50%;
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      z-index: 999;
+      /* Set a higher z-index value */
     }
 
     textarea {
@@ -58,12 +72,23 @@
 </head>
 
 <body>
+  <div id="fadeCircle"></div>
   <div class="textarea">
     <textarea autofocus placeholder="type..." spellcheck="false">{{.Text}}</textarea>
   </div>
 
   <script>
     var socket;
+
+    function fadeInCircle() {
+      var circle = document.getElementById('fadeCircle');
+      circle.style.opacity = '1';
+    }
+
+    function fadeOutCircle() {
+      var circle = document.getElementById('fadeCircle');
+      circle.style.opacity = '0';
+    }
 
     function setCursorPos(input, start, end) {
       if (arguments.length < 3) end = start;
@@ -122,16 +147,17 @@
       };
     }
 
+    const fadeOut = debounce(function () {
+      fadeOutCircle();
+    }, 500);
+
 
     const socketMessageListener = (e) => {
       data = JSON.parse(e.data);
-      if (data.action == "processed") {
-
-      } else if (data.action == "onsetdetect") {
-
-      } else {
-        console.log(`unknown action: ${data.action}`);
+      if (data.title == "ok") {
+        fadeOut();
       }
+
     };
     const socketOpenListener = (e) => {
       console.log('Connected');
@@ -159,14 +185,16 @@
       // listen to change in textarea
       const textarea = document.querySelector('textarea');
 
+
       const updateText = debounce(function () {
-        console.log("ok text changed: " + textarea.value.length);
         var pos = getCursorPos(textarea);
+        fadeInCircle();
         socket.send(JSON.stringify({
           text: textarea.value,
           cursor_start: pos.start,
           cursor_end: pos.end,
         }));
+        fadeOut();
       }, 100);
 
       textarea.addEventListener('keydown', function (e) {
@@ -191,6 +219,9 @@
       setCursorPos(textarea, {{.CursorStart }}, {{.CursorEnd }});
     textarea.focus();
     });
+
+
+
 
   </script>
 </body>

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/microcosm-cc/bluemonday"
 	log "github.com/schollz/logger"
 	bolt "go.etcd.io/bbolt"
 )
@@ -26,6 +27,7 @@ var db *bolt.DB
 
 //go:embed static/*
 var content embed.FS
+var policy *bluemonday.Policy
 
 func init() {
 	flag.StringVar(&flagPort, "port", "8001", "port to run the server on")
@@ -36,6 +38,8 @@ func init() {
 func main() {
 	flag.Parse()
 	log.SetLevel(flagLog)
+
+	policy = bluemonday.UGCPolicy()
 
 	// databse is bolt db database
 	var err error
@@ -198,6 +202,7 @@ func handle(w http.ResponseWriter, r *http.Request) (err error) {
 		return nil
 	})
 	log.Tracef("loading: %+v", p)
+	p.Text = policy.Sanitize(p.Text)
 	return indexTemplate.Execute(w, p)
 }
 
@@ -241,6 +246,7 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 		if err != nil {
 			log.Error(err)
 		}
+		c.WriteJSON(Page{Title: "ok"})
 	}
 	return
 }
