@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>
+    {{.Title}}
+  </title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width" />
+  <link rel="apple-touch-icon" sizes="57x57" href=/static/apple-icon-57x57.png>
+  <link rel="apple-touch-icon" sizes="60x60" href=/static/img/cowyo/apple-icon-60x60.png>
+  <link rel="apple-touch-icon" sizes="72x72" href=/static/apple-icon-72x72.png>
+  <link rel="apple-touch-icon" sizes="76x76" href=/static/apple-icon-76x76.png>
+  <link rel="apple-touch-icon" sizes="114x114" href=/static/apple-icon-114x114.png>
+  <link rel="apple-touch-icon" sizes="120x120" href=/static/apple-icon-120x120.png>
+  <link rel="apple-touch-icon" sizes="144x144" href=/static/apple-icon-144x144.png>
+  <link rel="apple-touch-icon" sizes="152x152" href=/static/apple-icon-152x152.png>
+  <link rel="apple-touch-icon" sizes="180x180" href=/static/apple-icon-180x180.png>
+  <link rel="icon" type="image/png" sizes="192x192" href=/static/android-icon-192x192.png>
+  <link rel="icon" type="image/png" sizes="32x32" href=/static/favicon-32x32.png>
+  <link rel="icon" type="image/png" sizes="96x96" href=/static/favicon-96x96.png>
+  <link rel="icon" type="image/png" sizes="16x16" href=/static/favicon-16x16.png>
+  <link rel="manifest" href=/static/manifest.json>
+  <meta name="msapplication-TileColor" content="#fff">
+  <meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
+  <meta name="theme-color" content="#fff">
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #f0f0f0;
+      color: #333;
+    }
+
+    textarea {
+      width: 100%;
+      height: 99%;
+      box-sizing: border-box;
+      -moz-box-sizing: border-box;
+      -webkit-box-sizing: border-box;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: 0;
+      border: 0;
+      border: none;
+      outline: none;
+      -webkit-box-shadow: none;
+      -moz-box-shadow: none;
+      box-shadow: none;
+      resize: none;
+      padding: 1em;
+      background-color: #f0f0f0;
+      color: #333;
+      font-size: 1.5em;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="textarea">
+    <textarea autofocus placeholder="type..." spellcheck="false">{{.Text}}</textarea>
+  </div>
+
+  <script>
+    var socket;
+
+    function setCursorPos(input, start, end) {
+      if (arguments.length < 3) end = start;
+      if ("selectionStart" in input) {
+        setTimeout(function () {
+          input.selectionStart = start;
+          input.selectionEnd = end;
+        }, 1);
+      }
+      else if (input.createTextRange) {
+        var rng = input.createTextRange();
+        rng.moveStart("character", start);
+        rng.collapse();
+        rng.moveEnd("character", end - start);
+        rng.select();
+      }
+    }
+
+    function getCursorPos(input) {
+      if ("selectionStart" in input && document.activeElement == input) {
+        return {
+          start: input.selectionStart,
+          end: input.selectionEnd
+        };
+      }
+      else if (input.createTextRange) {
+        var sel = document.selection.createRange();
+        if (sel.parentElement() === input) {
+          var rng = input.createTextRange();
+          rng.moveToBookmark(sel.getBookmark());
+          for (var len = 0;
+            rng.compareEndPoints("EndToStart", rng) > 0;
+            rng.moveEnd("character", -1)) {
+            len++;
+          }
+          rng.setEndPoint("StartToStart", input.createTextRange());
+          for (var pos = { start: 0, end: len };
+            rng.compareEndPoints("EndToStart", rng) > 0;
+            rng.moveEnd("character", -1)) {
+            pos.start++;
+            pos.end++;
+          }
+          return pos;
+        }
+      }
+      return -1;
+    }
+
+    const debounce = (callback, wait) => {
+      let timeoutId = null;
+      return (...args) => {
+        window.clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(() => {
+          callback(...args);
+        }, wait);
+      };
+    }
+
+
+    const socketMessageListener = (e) => {
+      data = JSON.parse(e.data);
+      if (data.action == "processed") {
+
+      } else if (data.action == "onsetdetect") {
+
+      } else {
+        console.log(`unknown action: ${data.action}`);
+      }
+    };
+    const socketOpenListener = (e) => {
+      console.log('Connected');
+    };
+    const socketErrorListener = (e) => {
+      console.error(e);
+    }
+    const socketCloseListener = (e) => {
+      if (socket) {
+        console.log('Disconnected.');
+      }
+      var place = window.location.pathname;
+      // remove front slash
+      if (place[0] == '/') {
+        place = place.substring(1);
+      }
+      var url = window.origin.replace("http", "ws") + '/ws?place=' + place;
+      socket = new WebSocket(url);
+      socket.onopen = socketOpenListener;
+      socket.onmessage = socketMessageListener;
+      socket.onclose = socketCloseListener;
+      socket.onerror = socketErrorListener;
+    };
+    window.addEventListener('load', (event) => {
+      // listen to change in textarea
+      const textarea = document.querySelector('textarea');
+
+      const updateText = debounce(function () {
+        console.log("ok text changed: " + textarea.value.length);
+        var pos = getCursorPos(textarea);
+        socket.send(JSON.stringify({
+          text: textarea.value,
+          cursor_start: pos.start,
+          cursor_end: pos.end,
+        }));
+      }, 100);
+
+      textarea.addEventListener('keydown', function (e) {
+        if (e.key == 'Tab') {
+          e.preventDefault();
+          var start = this.selectionStart;
+          var end = this.selectionEnd;
+
+          // set textarea value to: text before caret + tab + text after caret
+          this.value = this.value.substring(0, start) +
+            "\t" + this.value.substring(end);
+
+          // put caret at right position again
+          this.selectionStart =
+            this.selectionEnd = start + 1;
+        }
+        updateText();
+      });
+
+      socketCloseListener();
+
+      setCursorPos(textarea, {{.CursorStart }}, {{.CursorEnd }});
+    textarea.focus();
+    });
+
+  </script>
+</body>
+
+</html>
