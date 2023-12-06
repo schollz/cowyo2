@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html"
 	"math/rand"
 	"net/http"
 	"os"
@@ -202,6 +203,7 @@ func handle(w http.ResponseWriter, r *http.Request) (err error) {
 		return nil
 	})
 	log.Tracef("loading: %+v", p)
+	p.Text = html.EscapeString(p.Text)
 	p.Text = policy.Sanitize(p.Text)
 	return indexTemplate.Execute(w, p)
 }
