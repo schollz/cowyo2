@@ -25,8 +25,14 @@
   <meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
   <meta name="theme-color" content="#f0f0f0">
   <style>
+
+@font-face {
+  font-family: 'MonaspaceKrypton'; /* Choose a name for your font family */
+  src: url('/static/MonaspaceKrypton-Regular.woff') format('woff'); /* Adjust the path to your .woff file */
+}
+
     body {
-      font-family: 'Courier New', monospace;
+      font-family: 'MonaspaceKrypton','Courier New', monospace;
       background-color: #f0f0f0;
       color: #333;
     }
@@ -46,6 +52,7 @@
     }
 
     textarea {
+      font-family: 'MonaspaceKrypton','Courier New', monospace;
       width: 100%;
       height: 99%;
       box-sizing: border-box;
@@ -66,8 +73,14 @@
       padding: 1em;
       background-color: #f0f0f0;
       color: #333;
-      font-size: 1.5em;
+      font-size: 1.2em;
     }
+
+    @media only screen and (max-width: 600px) {
+            textarea {
+              font-size: 1.0em;
+            }
+        }
   </style>
 </head>
 
