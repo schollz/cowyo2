@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -25,10 +26,17 @@ var flagPort string
 var flagLog string
 var flagMigrate string
 var db *bolt.DB
+var connections map[string]Connection
+var mu sync.Mutex
 
 //go:embed static/*
 var content embed.FS
 var policy *bluemonday.Policy
+
+type Connection struct {
+	conn  *websocket.Conn
+	place string
+}
 
 func init() {
 	flag.StringVar(&flagPort, "port", "8001", "port to run the server on")
@@ -39,6 +47,8 @@ func init() {
 func main() {
 	flag.Parse()
 	log.SetLevel(flagLog)
+
+	connections = make(map[string]Connection)
 
 	policy = bluemonday.UGCPolicy()
 
@@ -227,6 +237,22 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 		return
 	}
 
+	// generate random string
+	// this is used to identify the websocket connection
+	// so that we can send updates to the correct websocket
+	// connection
+	idCurrent := RandStringBytesMaskImprSrc(32)
+	mu.Lock()
+	connections[idCurrent] = Connection{conn: c, place: place}
+	mu.Unlock()
+
+	defer func() {
+		mu.Lock()
+		// delete connection
+		delete(connections, idCurrent)
+		mu.Unlock()
+	}()
+
 	for {
 		var p Page
 		err := c.ReadJSON(&p)
@@ -247,8 +273,60 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) (err error) {
 		})
 		if err != nil {
 			log.Error(err)
+		} else {
+			// update all the other connections
+			go func() {
+				// recover panic
+				defer func() {
+					if r := recover(); r != nil {
+						log.Error(r)
+						mu.Unlock()
+					}
+				}()
+				mu.Lock()
+				for id := range connections {
+					if id == idCurrent {
+						continue
+					}
+					if connections[id].place != place {
+						continue
+					}
+					err = connections[id].conn.WriteJSON(Page{Title: "update", Text: p.Text})
+					if err != nil {
+						log.Error(err)
+					}
+				}
+				mu.Unlock()
+			}()
 		}
 		c.WriteJSON(Page{Title: "ok"})
 	}
 	return
+}
+
+var src = rand.NewSource(time.Now().UnixNano())
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+func RandStringBytesMaskImprSrc(n int) string {
+	b := make([]byte, n)
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return string(b)
 }
